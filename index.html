@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wikidata Provenance Inspector (High-Density)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.35; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .badge-ref { background-color: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+    .badge-qual { background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col custom-scrollbar">
+
+  <!-- Compact Sticky Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-2 sm:px-4 py-1.5 flex items-center justify-between gap-2">
+      <!-- Title Logo -->
+      <div class="flex items-center space-x-2 shrink-0">
+        <div class="bg-blue-600 text-white p-1.5 rounded-md text-xs shadow-xs">
+          <i class="fa-solid fa-timeline"></i>
+        </div>
+        <div>
+          <h1 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">Wikidata Provenance</h1>
+        </div>
+      </div>
+
+      <!-- Quick Compact Search Bar -->
+      <div class="relative flex-1 max-w-sm">
+        <div class="relative">
+          <input 
+            type="text" 
+            id="searchInput"
+            placeholder="Search Q-item (e.g. Q42, Ada Lovelace)..." 
+            class="w-full pl-7 pr-7 py-1 bg-slate-100 border border-slate-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white transition"
+            autocomplete="off"
+          />
+          <i class="fa-solid fa-magnifying-glass absolute left-2 top-1.5 text-slate-400 text-[11px]"></i>
+          <button id="clearSearch" class="hidden absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 text-xs">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
+        </div>
+        <!-- Search Results Dropdown -->
+        <div id="searchResults" class="hidden absolute left-0 right-0 top-full mt-0.5 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-1.5 sm:px-3 py-2 space-y-2">
+
+    <!-- Dense Item Header Banner (Hidden initial state) -->
+    <div id="itemHeader" class="hidden bg-white border border-slate-200 rounded-lg p-2.5 shadow-xs relative">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <h2 id="itemLabel" class="text-base font-bold text-slate-900 truncate">--</h2>
+            <span id="itemIdBadge" class="bg-blue-50 text-blue-700 font-mono px-1.5 py-0.2 rounded text-[11px] font-semibold border border-blue-200">Q0</span>
+            <a id="wikidataLink" href="#" target="_blank" class="text-[11px] text-blue-600 hover:underline flex items-center gap-1">
+              Wikidata <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+            </a>
+          </div>
+          <p id="itemDescription" class="text-xs text-slate-500 truncate italic">No description provided</p>
+        </div>
+        
+        <!-- Dense Stat Badges -->
+        <div class="flex items-center gap-2 bg-slate-50 p-1 rounded border border-slate-200/80 shrink-0 text-center">
+          <div class="px-2">
+            <div id="statTotalRevisions" class="text-xs font-bold text-slate-800">0</div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-tight">Revisions</div>
+          </div>
+          <div class="h-5 w-px bg-slate-200"></div>
+          <div class="px-2">
+            <div id="statActiveClaims" class="text-xs font-bold text-slate-800">0</div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-tight">Active</div>
+          </div>
+          <div class="h-5 w-px bg-slate-200"></div>
+          <div class="px-2">
+            <div id="statDeletedClaims" class="text-xs font-bold text-rose-600">0</div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-tight">Deleted</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compact Progress Bar -->
+      <div id="statusContainer" class="mt-2 pt-1.5 border-t border-slate-100 hidden">
+        <div class="flex justify-between text-[11px] text-slate-600 font-medium mb-0.5">
+          <span id="statusMessage">Fetching history...</span>
+          <span id="statusPercent">0%</span>
+        </div>
+        <div class="w-full bg-slate-200 h-1 rounded-full overflow-hidden">
+          <div id="progressBar" class="bg-blue-600 h-full w-0 transition-all duration-150"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty / Welcome State -->
+    <div id="welcomeState" class="bg-white border border-slate-200 rounded-lg p-6 text-center my-4 shadow-xs">
+      <div class="max-w-md mx-auto space-y-2">
+        <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mx-auto text-lg">
+          <i class="fa-solid fa-magnifying-glass-chart"></i>
+        </div>
+        <h2 class="text-sm font-bold text-slate-800">Analyze Wikidata Entity Provenance</h2>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Quick search: 
+          <button onclick="quickSearch('Q42')" class="text-blue-600 hover:underline font-medium">Douglas Adams (Q42)</button>, 
+          <button onclick="quickSearch('Q2')" class="text-blue-600 hover:underline font-medium">Earth (Q2)</button>, 
+          <button onclick="quickSearch('Q11621')" class="text-blue-600 hover:underline font-medium">Ada Lovelace (Q11621)</button>
+        </p>
+      </div>
+    </div>
+
+    <!-- Main Views (Tabs) -->
+    <div id="analysisContent" class="hidden space-y-2">
+      <!-- High Density Navigation Tabs -->
+      <div class="flex border-b border-slate-200 bg-white px-2 pt-1 rounded-t-lg shadow-xs text-xs">
+        <button id="tabActiveBtn" onclick="switchTab('active')" class="tab-btn active border-b-2 border-blue-600 text-blue-600 font-semibold py-1.5 px-3 flex items-center gap-1.5">
+          <i class="fa-solid fa-list-check text-[11px]"></i>
+          Active Statements
+          <span id="badgeActiveCount" class="bg-blue-100 text-blue-700 text-[10px] px-1.5 rounded-full">0</span>
+        </button>
+        <button id="tabDeletedBtn" onclick="switchTab('deleted')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5">
+          <i class="fa-solid fa-trash-arrow-up text-[11px]"></i>
+          Deleted Facts
+          <span id="badgeDeletedCount" class="bg-slate-100 text-slate-600 text-[10px] px-1.5 rounded-full">0</span>
+        </button>
+        <button id="tabLeaderboardBtn" onclick="switchTab('leaderboard')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5">
+          <i class="fa-solid fa-trophy text-[11px]"></i>
+          Contributors Ranking
+        </button>
+      </div>
+
+      <!-- TAB 1: Active Statements & Provenance -->
+      <div id="viewActive" class="tab-view space-y-2">
+        <div class="flex items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-200 text-xs">
+          <div class="relative flex-1">
+            <input type="text" id="filterActiveInput" onkeyup="filterActiveStatements()" placeholder="Filter properties or values..." class="w-full pl-7 pr-2 py-1 bg-slate-50 border border-slate-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <i class="fa-solid fa-filter absolute left-2 top-2 text-slate-400 text-[10px]"></i>
+          </div>
+          <span class="text-[11px] text-slate-500 hidden sm:inline">Compact Statement Origins & Attributions</span>
+        </div>
+
+        <div id="activeStatementsContainer" class="space-y-1.5">
+          <!-- Dynamically filled with active statements -->
+        </div>
+      </div>
+
+      <!-- TAB 2: Deleted / Reverted Facts -->
+      <div id="viewDeleted" class="tab-view hidden space-y-2">
+        <div class="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[11px] text-amber-800 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600 shrink-0"></i>
+          <span>Historical log of statements, qualifiers, or references present in past revisions but later removed or reverted.</span>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs">
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full text-left text-xs text-slate-600">
+              <thead class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold text-[11px]">
+                <tr>
+                  <th class="py-1.5 px-2.5">Property</th>
+                  <th class="py-1.5 px-2.5">Removed Value</th>
+                  <th class="py-1.5 px-2.5">Added By</th>
+                  <th class="py-1.5 px-2.5">Removed By</th>
+                  <th class="py-1.5 px-2.5">Removed Date</th>
+                </tr>
+              </thead>
+              <tbody id="deletedTableBody" class="divide-y divide-slate-100">
+                <!-- Dynamically filled -->
+              </tbody>
+            </table>
+          </div>
+          <div id="deletedEmptyState" class="hidden p-4 text-center text-slate-500 text-xs font-sans">
+            <i class="fa-solid fa-circle-check text-slate-300 text-xl mb-1"></i>
+            <p>No deleted statements detected in analyzed revisions.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Contributor Leaderboard -->
+      <div id="viewLeaderboard" class="tab-view hidden space-y-2">
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-xs flex items-center space-x-2">
+            <div class="p-1.5 bg-amber-100 text-amber-700 rounded text-xs shrink-0"><i class="fa-solid fa-crown"></i></div>
+            <div class="min-w-0">
+              <div class="text-[10px] text-slate-400">Top Contributor</div>
+              <div id="topContributorName" class="font-bold text-slate-800 truncate">--</div>
+            </div>
+          </div>
+          <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-xs flex items-center space-x-2">
+            <div class="p-1.5 bg-blue-100 text-blue-700 rounded text-xs shrink-0"><i class="fa-solid fa-users"></i></div>
+            <div>
+              <div class="text-[10px] text-slate-400">Active Editors</div>
+              <div id="totalContributorsCount" class="font-bold text-slate-800">0</div>
+            </div>
+          </div>
+          <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-xs flex items-center space-x-2">
+            <div class="p-1.5 bg-emerald-100 text-emerald-700 rounded text-xs shrink-0"><i class="fa-solid fa-layer-group"></i></div>
+            <div>
+              <div class="text-[10px] text-slate-400">Active Points</div>
+              <div id="totalActiveElementsCount" class="font-bold text-slate-800">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-lg p-2.5 shadow-xs">
+          <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-chart-bar text-blue-600"></i>
+            Active Statement Contributor Rankings
+          </h3>
+          <div id="leaderboardContainer" class="space-y-1">
+            <!-- Leaderboard list filled dynamically -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- JavaScript Logic -->
+  <script>
+    // App State
+    let currentEntityId = null;
+    let entityData = null;
+    let propertyLabels = {};
+    let entityLabels = {};
+    let revisionsList = [];
+    let activeProvenanceMap = {};
+    let deletedFactsList = [];
+    let contributorStats = {};
+    let searchDebounce = null;
+
+    const API_URL = 'https://www.wikidata.org/w/api.php';
+
+    // DOM Elements
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    const clearSearchBtn = document.getElementById('clearSearch');
+
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      clearSearchBtn.classList.toggle('hidden', query.length === 0);
+
+      clearTimeout(searchDebounce);
+      if (query.length < 2) {
+        searchResults.classList.add('hidden');
+        return;
+      }
+      searchDebounce = setTimeout(() => fetchSearchResults(query), 300);
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearSearchBtn.classList.add('hidden');
+      searchResults.classList.add('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.classList.add('hidden');
+      }
+    });
+
+    function quickSearch(q) {
+      searchInput.value = q;
+      loadEntity(q);
+    }
+
+    async function fetchSearchResults(query) {
+      try {
+        const params = new URLSearchParams({
+          action: 'wbsearchentities',
+          search: query,
+          language: 'en',
+          limit: '6',
+          format: 'json',
+          origin: '*'
+        });
+
+        const res = await fetch(`${API_URL}?${params.toString()}`);
+        const data = await res.json();
+
+        if (data.search && data.search.length > 0) {
+          renderSearchResults(data.search);
+        } else {
+          searchResults.innerHTML = `<div class="p-2 text-slate-400 text-center">No entities found</div>`;
+          searchResults.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error('Search error:', err);
+      }
+    }
+
+    function renderSearchResults(results) {
+      searchResults.innerHTML = '';
+      results.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'px-2.5 py-1.5 hover:bg-slate-50 cursor-pointer flex flex-col transition border-b border-slate-100 last:border-b-0';
+        div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-slate-900 truncate">${escapeHtml(item.label || item.id)}</span>
+            <span class="font-mono bg-slate-100 text-slate-600 px-1 rounded text-[10px] ml-1 shrink-0">${item.id}</span>
+          </div>
+          <span class="text-[10px] text-slate-400 truncate">${escapeHtml(item.description || 'No description')}</span>
+        `;
+        div.onclick = () => {
+          searchResults.classList.add('hidden');
+          searchInput.value = item.label ? `${item.label} (${item.id})` : item.id;
+          loadEntity(item.id);
+        };
+        searchResults.appendChild(div);
+      });
+      searchResults.classList.remove('hidden');
+    }
+
+    async function loadEntity(qId) {
+      currentEntityId = qId;
+      resetState();
+
+      document.getElementById('welcomeState').classList.add('hidden');
+      document.getElementById('itemHeader').classList.remove('hidden');
+      document.getElementById('statusContainer').classList.remove('hidden');
+      document.getElementById('analysisContent').classList.add('hidden');
+
+      updateProgress(15, 'Fetching entity details...');
+
+      try {
+        const entityParams = new URLSearchParams({
+          action: 'wbgetentities',
+          ids: qId,
+          format: 'json',
+          origin: '*'
+        });
+        const entityRes = await fetch(`${API_URL}?${entityParams.toString()}`);
+        const entityJson = await entityRes.json();
+        entityData = entityJson.entities[qId];
+
+        if (!entityData) {
+          alert('Failed to load item data');
+          return;
+        }
+
+        const label = entityData.labels?.en?.value || Object.values(entityData.labels || {})[0]?.value || qId;
+        const desc = entityData.descriptions?.en?.value || Object.values(entityData.descriptions || {})[0]?.value || 'No description';
+
+        document.getElementById('itemLabel').innerText = label;
+        document.getElementById('itemIdBadge').innerText = qId;
+        document.getElementById('itemDescription').innerText = desc;
+        document.getElementById('wikidataLink').href = `https://www.wikidata.org/wiki/${qId}`;
+
+        updateProgress(40, 'Fetching revisions...');
+        revisionsList = await fetchAllRevisions(qId, 80);
+        document.getElementById('statTotalRevisions').innerText = revisionsList.length;
+
+        updateProgress(70, 'Analyzing statement diffs...');
+        await analyzeProvenanceAndDeletions();
+
+        updateProgress(90, 'Fetching labels...');
+        await fetchMissingLabels();
+
+        updateProgress(100, 'Complete!');
+
+        setTimeout(() => {
+          document.getElementById('statusContainer').classList.add('hidden');
+          document.getElementById('analysisContent').classList.remove('hidden');
+          renderAllViews();
+        }, 200);
+
+      } catch (err) {
+        console.error('Error analyzing entity:', err);
+        document.getElementById('statusMessage').innerText = 'Error loading history.';
+      }
+    }
+
+    function resetState() {
+      entityData = null;
+      propertyLabels = {};
+      entityLabels = {};
+      revisionsList = [];
+      activeProvenanceMap = {};
+      deletedFactsList = [];
+      contributorStats = {};
+    }
+
+    function updateProgress(percent, msg) {
+      document.getElementById('progressBar').style.width = `${percent}%`;
+      document.getElementById('statusPercent').innerText = `${percent}%`;
+      document.getElementById('statusMessage').innerText = msg;
+    }
+
+    async function fetchAllRevisions(qId, limit = 80) {
+      let revs = [];
+      let rvcontinue = null;
+
+      while (revs.length < limit) {
+        const fetchCount = Math.min(limit - revs.length, 50);
+        const params = new URLSearchParams({
+          action: 'query',
+          prop: 'revisions',
+          titles: qId,
+          rvprop: 'ids|timestamp|user|comment|content',
+          rvslots: 'main',
+          rvlimit: fetchCount.toString(),
+          format: 'json',
+          origin: '*'
+        });
+
+        if (rvcontinue) params.append('rvcontinue', rvcontinue);
+
+        const res = await fetch(`${API_URL}?${params.toString()}`);
+        const data = await res.json();
+        const pages = data.query?.pages;
+        if (!pages) break;
+
+        const page = Object.values(pages)[0];
+        if (page.revisions) {
+          revs = revs.concat(page.revisions);
+        }
+
+        if (data.continue?.rvcontinue) {
+          rvcontinue = data.continue.rvcontinue;
+        } else {
+          break;
+        }
+      }
+      return revs;
+    }
+
+    async function analyzeProvenanceAndDeletions() {
+      const chronologicalRevs = [...revisionsList].reverse();
+      let trackedClaims = {};
+      let activeOwners = {};
+
+      for (const rev of chronologicalRevs) {
+        const user = rev.user || 'Anonymous';
+        const timestamp = rev.timestamp;
+        const revid = rev.revid;
+
+        let content = rev.slots?.main?.['*'];
+        if (!content) continue;
+
+        let revClaims = {};
+        try {
+          const parsed = JSON.parse(content);
+          revClaims = parsed.claims || {};
+        } catch (e) {
+          continue;
+        }
+
+        let currentRevisionGuids = new Set();
+
+        for (const [prop, claimsArr] of Object.entries(revClaims)) {
+          claimsArr.forEach(claim => {
+            const guid = claim.id || `${prop}_${JSON.stringify(claim.mainsnak.datavalue)}`;
+            currentRevisionGuids.add(guid);
+
+            if (!trackedClaims[guid]) {
+              trackedClaims[guid] = claim;
+              activeOwners[guid] = { user, timestamp, revid, prop };
+            }
+
+            if (claim.qualifiers) {
+              for (const [qProp, qArr] of Object.entries(claim.qualifiers)) {
+                qArr.forEach(q => {
+                  const qHash = `${guid}_qual_${q.hash || JSON.stringify(q.datavalue)}`;
+                  if (!activeOwners[qHash]) {
+                    activeOwners[qHash] = { user, timestamp, revid, prop: qProp };
+                  }
+                });
+              }
+            }
+
+            if (claim.references) {
+              claim.references.forEach(ref => {
+                const refHash = `${guid}_ref_${ref.hash}`;
+                if (!activeOwners[refHash]) {
+                  activeOwners[refHash] = { user, timestamp, revid, prop: 'reference' };
+                }
+              });
+            }
+          });
+        }
+
+        for (const [guid, claim] of Object.entries(trackedClaims)) {
+          if (!currentRevisionGuids.has(guid)) {
+            const initialOwner = activeOwners[guid]?.user || 'Unknown';
+            const valueStr = formatClaimValueRaw(claim.mainsnak);
+
+            deletedFactsList.push({
+              property: claim.mainsnak.property,
+              value: valueStr,
+              addedBy: initialOwner,
+              removedBy: user,
+              removedAt: timestamp,
+              revid: revid
+            });
+
+            delete trackedClaims[guid];
+            delete activeOwners[guid];
+          }
+        }
+      }
+
+      activeProvenanceMap = activeOwners;
+
+      let activeClaimsCount = 0;
+      contributorStats = {};
+
+      if (entityData.claims) {
+        for (const [prop, claims] of Object.entries(entityData.claims)) {
+          claims.forEach(claim => {
+            activeClaimsCount++;
+            const guid = claim.id;
+            const owner = activeProvenanceMap[guid]?.user || 'Unknown/Historic';
+            
+            contributorStats[owner] = (contributorStats[owner] || 0) + 1;
+
+            if (claim.qualifiers) {
+              for (const [qProp, qArr] of Object.entries(claim.qualifiers)) {
+                qArr.forEach(q => {
+                  const qHash = `${guid}_qual_${q.hash || JSON.stringify(q.datavalue)}`;
+                  const qOwner = activeProvenanceMap[qHash]?.user || owner;
+                  contributorStats[qOwner] = (contributorStats[qOwner] || 0) + 0.5;
+                });
+              }
+            }
+
+            if (claim.references) {
+              claim.references.forEach(ref => {
+                const refHash = `${guid}_ref_${ref.hash}`;
+                const refOwner = activeProvenanceMap[refHash]?.user || owner;
+                contributorStats[refOwner] = (contributorStats[refOwner] || 0) + 0.5;
+              });
+            }
+          });
+        }
+      }
+
+      document.getElementById('statActiveClaims').innerText = activeClaimsCount;
+      document.getElementById('statDeletedClaims').innerText = deletedFactsList.length;
+      document.getElementById('badgeActiveCount').innerText = activeClaimsCount;
+      document.getElementById('badgeDeletedCount').innerText = deletedFactsList.length;
+    }
+
+    async function fetchMissingLabels() {
+      const idsToFetch = new Set();
+
+      if (entityData.claims) {
+        for (const [prop, claims] of Object.entries(entityData.claims)) {
+          idsToFetch.add(prop);
+          claims.forEach(c => {
+            if (c.mainsnak.datavalue?.type === 'wikibase-entityid') {
+              idsToFetch.add(c.mainsnak.datavalue.value.id);
+            }
+            if (c.qualifiers) {
+              Object.keys(c.qualifiers).forEach(p => idsToFetch.add(p));
+            }
+          });
+        }
+      }
+
+      deletedFactsList.forEach(df => idsToFetch.add(df.property));
+
+      const idArray = Array.from(idsToFetch).filter(id => id.startsWith('P') || id.startsWith('Q')).slice(0, 50);
+      if (idArray.length === 0) return;
+
+      try {
+        const params = new URLSearchParams({
+          action: 'wbgetentities',
+          ids: idArray.join('|'),
+          props: 'labels',
+          languages: 'en',
+          format: 'json',
+          origin: '*'
+        });
+
+        const res = await fetch(`${API_URL}?${params.toString()}`);
+        const data = await res.json();
+
+        if (data.entities) {
+          for (const [id, ent] of Object.entries(data.entities)) {
+            const lbl = ent.labels?.en?.value || id;
+            if (id.startsWith('P')) propertyLabels[id] = lbl;
+            else entityLabels[id] = lbl;
+          }
+        }
+      } catch (e) {
+        console.error('Label fetch error:', e);
+      }
+    }
+
+    function renderAllViews() {
+      renderActiveStatements();
+      renderDeletedFacts();
+      renderLeaderboard();
+    }
+
+    function renderActiveStatements() {
+      const container = document.getElementById('activeStatementsContainer');
+      container.innerHTML = '';
+
+      if (!entityData.claims || Object.keys(entityData.claims).length === 0) {
+        container.innerHTML = `<div class="bg-white p-4 rounded-lg text-center text-slate-400 text-xs">No active statements found on this entity.</div>`;
+        return;
+      }
+
+      for (const [propId, claims] of Object.entries(entityData.claims)) {
+        const propLabel = propertyLabels[propId] || propId;
+
+        const propBlock = document.createElement('div');
+        propBlock.className = 'active-statement-group bg-white border border-slate-200 rounded-md overflow-hidden shadow-2xs';
+
+        let claimsHtml = '';
+        claims.forEach(claim => {
+          const guid = claim.id;
+          const prov = activeProvenanceMap[guid] || { user: 'Unknown', timestamp: 'N/A' };
+          const valFormatted = formatSnakValue(claim.mainsnak);
+
+          let qualifiersHtml = '';
+          if (claim.qualifiers) {
+            qualifiersHtml += `<div class="mt-1 pl-2 border-l-2 border-emerald-300 space-y-0.5">`;
+            for (const [qProp, qArr] of Object.entries(claim.qualifiers)) {
+              const qPropLabel = propertyLabels[qProp] || qProp;
+              qArr.forEach(q => {
+                const qHash = `${guid}_qual_${q.hash || JSON.stringify(q.datavalue)}`;
+                const qProv = activeProvenanceMap[qHash] || prov;
+                qualifiersHtml += `
+                  <div class="text-[11px] flex flex-wrap items-center gap-1.5">
+                    <span class="badge-qual px-1 py-0 rounded font-medium">${escapeHtml(qPropLabel)}:</span>
+                    <span class="text-slate-800 font-mono">${formatSnakValue(q)}</span>
+                    <span class="text-[10px] text-slate-400">added by <strong class="text-slate-600">${escapeHtml(qProv.user)}</strong></span>
+                  </div>
+                `;
+              });
+            }
+            qualifiersHtml += `</div>`;
+          }
+
+          let referencesHtml = '';
+          if (claim.references) {
+            referencesHtml += `<div class="mt-1 pl-2 border-l-2 border-sky-300 space-y-0.5">`;
+            claim.references.forEach((ref, idx) => {
+              const refHash = `${guid}_ref_${ref.hash}`;
+              const refProv = activeProvenanceMap[refHash] || prov;
+              referencesHtml += `
+                <div class="text-[11px] flex flex-wrap items-center gap-1.5">
+                  <span class="badge-ref px-1 py-0 rounded font-medium">Ref #${idx + 1}</span>
+                  <span class="text-[10px] text-slate-400">added by <strong class="text-slate-600">${escapeHtml(refProv.user)}</strong> (${formatDate(refProv.timestamp)})</span>
+                </div>
+              `;
+            });
+            referencesHtml += `</div>`;
+          }
+
+          claimsHtml += `
+            <div class="px-2.5 py-1.5 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60 transition">
+              <div class="flex flex-wrap items-center justify-between gap-1">
+                <div class="text-xs font-semibold text-slate-900 font-mono leading-tight">
+                  ${valFormatted}
+                </div>
+                <div class="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-1.5 py-0 rounded text-[10px] text-slate-600">
+                  <i class="fa-solid fa-user-pen text-blue-500 text-[9px]"></i>
+                  <span><strong class="text-slate-800">${escapeHtml(prov.user)}</strong></span>
+                  <span class="text-slate-300">&bull;</span>
+                  <span class="text-slate-500">${formatDate(prov.timestamp)}</span>
+                </div>
+              </div>
+
+              ${qualifiersHtml}
+              ${referencesHtml}
+            </div>
+          `;
+        });
+
+        propBlock.innerHTML = `
+          <div class="bg-slate-50 px-2.5 py-1 border-b border-slate-200 flex justify-between items-center text-xs">
+            <span class="font-bold text-slate-800 flex items-center gap-1">
+              <i class="fa-solid fa-tag text-slate-400 text-[10px]"></i>
+              ${escapeHtml(propLabel)}
+            </span>
+            <span class="font-mono text-[10px] text-slate-400">${propId}</span>
+          </div>
+          <div class="divide-y divide-slate-100">
+            ${claimsHtml}
+          </div>
+        `;
+
+        container.appendChild(propBlock);
+      }
+    }
+
+    function renderDeletedFacts() {
+      const tbody = document.getElementById('deletedTableBody');
+      const emptyState = document.getElementById('deletedEmptyState');
+      tbody.innerHTML = '';
+
+      if (deletedFactsList.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      deletedFactsList.forEach(df => {
+        const propLabel = propertyLabels[df.property] || df.property;
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-rose-50/20 transition border-b border-slate-100 text-xs';
+        tr.innerHTML = `
+          <td class="py-1.5 px-2.5 font-medium text-slate-900">
+            ${escapeHtml(propLabel)}
+            <span class="text-[9px] text-slate-400 block font-mono">${df.property}</span>
+          </td>
+          <td class="py-1.5 px-2.5 text-rose-700 font-semibold font-mono max-w-xs truncate" title="${escapeHtml(df.value)}">
+            ${escapeHtml(df.value)}
+          </td>
+          <td class="py-1.5 px-2.5 text-slate-700">
+            <span class="bg-slate-100 px-1 py-0 rounded text-[10px]">${escapeHtml(df.addedBy)}</span>
+          </td>
+          <td class="py-1.5 px-2.5 text-slate-700">
+            <span class="bg-rose-100 text-rose-800 px-1 py-0 rounded text-[10px] font-medium">${escapeHtml(df.removedBy)}</span>
+          </td>
+          <td class="py-1.5 px-2.5 text-slate-400 text-[10px]">
+            ${formatDate(df.removedAt)}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderLeaderboard() {
+      const container = document.getElementById('leaderboardContainer');
+      container.innerHTML = '';
+
+      const sortedUsers = Object.entries(contributorStats)
+        .sort((a, b) => b[1] - a[1]);
+
+      const totalWeightedContributions = Object.values(contributorStats).reduce((a, b) => a + b, 0);
+
+      document.getElementById('totalContributorsCount').innerText = sortedUsers.length;
+      document.getElementById('totalActiveElementsCount').innerText = totalWeightedContributions.toFixed(0);
+
+      if (sortedUsers.length > 0) {
+        document.getElementById('topContributorName').innerText = sortedUsers[0][0];
+      } else {
+        document.getElementById('topContributorName').innerText = '--';
+      }
+
+      sortedUsers.forEach(([user, score], index) => {
+        const pct = totalWeightedContributions > 0 ? Math.round((score / totalWeightedContributions) * 100) : 0;
+        
+        const card = document.createElement('div');
+        card.className = 'bg-slate-50 p-2 rounded border border-slate-200/80 flex items-center justify-between gap-2 text-xs';
+
+        let rankBadgeClass = 'bg-slate-200 text-slate-700';
+        if (index === 0) rankBadgeClass = 'bg-amber-400 text-slate-900 font-bold';
+        else if (index === 1) rankBadgeClass = 'bg-slate-300 text-slate-800 font-bold';
+        else if (index === 2) rankBadgeClass = 'bg-amber-600 text-white font-bold';
+
+        card.innerHTML = `
+          <div class="flex items-center space-x-2 min-w-0 flex-1">
+            <div class="w-5 h-5 rounded flex items-center justify-center text-[10px] shrink-0 ${rankBadgeClass}">
+              #${index + 1}
+            </div>
+            <div class="min-w-0">
+              <div class="font-bold text-slate-800 text-xs flex items-center gap-1 truncate">
+                <span class="truncate">${escapeHtml(user)}</span>
+                <a href="https://www.wikidata.org/wiki/User:${encodeURIComponent(user)}" target="_blank" class="text-slate-400 hover:text-blue-600 text-[10px]">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-[10px] text-slate-500 font-mono">${score.toFixed(1)} pts</span>
+            <div class="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden hidden sm:block">
+              <div class="bg-blue-600 h-full rounded-full" style="width: ${pct}%"></div>
+            </div>
+            <span class="text-[10px] font-bold text-slate-600 w-7 text-right">${pct}%</span>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+      document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
+
+      if (tabName === 'active') {
+        document.getElementById('tabActiveBtn').classList.add('border-blue-600', 'text-blue-600');
+        document.getElementById('viewActive').classList.remove('hidden');
+      } else if (tabName === 'deleted') {
+        document.getElementById('tabDeletedBtn').classList.add('border-blue-600', 'text-blue-600');
+        document.getElementById('viewDeleted').classList.remove('hidden');
+      } else if (tabName === 'leaderboard') {
+        document.getElementById('tabLeaderboardBtn').classList.add('border-blue-600', 'text-blue-600');
+        document.getElementById('viewLeaderboard').classList.remove('hidden');
+      }
+    }
+
+    function filterActiveStatements() {
+      const query = document.getElementById('filterActiveInput').value.toLowerCase();
+      const groups = document.querySelectorAll('.active-statement-group');
+
+      groups.forEach(group => {
+        const text = group.innerText.toLowerCase();
+        group.classList.toggle('hidden', !text.includes(query));
+      });
+    }
+
+    function formatSnakValue(snak) {
+      if (!snak || !snak.datavalue) return '<span class="text-slate-400 italic">no value</span>';
+
+      const dv = snak.datavalue;
+      if (dv.type === 'wikibase-entityid') {
+        const id = dv.value.id;
+        const label = entityLabels[id] || id;
+        return `<span class="text-blue-700 hover:underline cursor-pointer" onclick="quickSearch('${id}')">${escapeHtml(label)}</span> <span class="text-[10px] text-slate-400">(${id})</span>`;
+      } else if (dv.type === 'string') {
+        return escapeHtml(dv.value);
+      } else if (dv.type === 'time') {
+        return escapeHtml(dv.value.time.replace(/^\+/, ''));
+      } else if (dv.type === 'quantity') {
+        return `${dv.value.amount}`;
+      } else if (dv.type === 'monolingualtext') {
+        return `${escapeHtml(dv.value.text)} <span class="text-[10px] text-slate-400">(${dv.value.language})</span>`;
+      }
+
+      return escapeHtml(JSON.stringify(dv.value));
+    }
+
+    function formatClaimValueRaw(snak) {
+      if (!snak || !snak.datavalue) return 'no value';
+      const dv = snak.datavalue;
+      if (dv.type === 'wikibase-entityid') return dv.value.id;
+      if (dv.type === 'string') return dv.value;
+      if (dv.type === 'time') return dv.value.time;
+      if (dv.type === 'quantity') return dv.value.amount;
+      return JSON.stringify(dv.value);
+    }
+
+    function formatDate(isoStr) {
+      if (!isoStr || isoStr === 'N/A') return 'N/A';
+      const d = new Date(isoStr);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
