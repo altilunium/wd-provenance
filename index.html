@@ -25,12 +25,14 @@
     <div class="max-w-7xl mx-auto px-2 sm:px-4 py-1.5 flex items-center justify-between gap-2">
       <!-- Title Logo -->
       <div class="flex items-center space-x-2 shrink-0">
-        <div class="bg-blue-600 text-white p-1.5 rounded-md text-xs shadow-xs">
-          <i class="fa-solid fa-timeline"></i>
-        </div>
-        <div>
-          <h1 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">Wikidata Provenance</h1>
-        </div>
+        <a href="#" onclick="clearEntityState(event)" class="flex items-center space-x-2">
+          <div class="bg-blue-600 text-white p-1.5 rounded-md text-xs shadow-xs">
+            <i class="fa-solid fa-timeline"></i>
+          </div>
+          <div>
+            <h1 class="text-xs sm:text-sm font-bold text-slate-900 leading-tight">Wikidata Provenance</h1>
+          </div>
+        </a>
       </div>
 
       <!-- Quick Compact Search Bar -->
@@ -67,6 +69,10 @@
             <a id="wikidataLink" href="#" target="_blank" class="text-[11px] text-blue-600 hover:underline flex items-center gap-1">
               Wikidata <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
             </a>
+            <button id="shareBtn" onclick="copyPermalink()" class="text-[11px] text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded flex items-center gap-1 transition">
+              <i class="fa-solid fa-link text-[10px]"></i>
+              <span id="shareBtnText">Copy Permalink</span>
+            </button>
           </div>
           <p id="itemDescription" class="text-xs text-slate-500 truncate italic">No description provided</p>
         </div>
@@ -86,6 +92,11 @@
           <div class="px-2">
             <div id="statDeletedClaims" class="text-xs font-bold text-rose-600">0</div>
             <div class="text-[9px] text-slate-500 uppercase tracking-tight">Deleted</div>
+          </div>
+          <div class="h-5 w-px bg-slate-200"></div>
+          <div class="px-2">
+            <div id="statLabelChanges" class="text-xs font-bold text-indigo-600">0</div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-tight">Label Edits</div>
           </div>
         </div>
       </div>
@@ -121,18 +132,23 @@
     <!-- Main Views (Tabs) -->
     <div id="analysisContent" class="hidden space-y-2">
       <!-- High Density Navigation Tabs -->
-      <div class="flex border-b border-slate-200 bg-white px-2 pt-1 rounded-t-lg shadow-xs text-xs">
-        <button id="tabActiveBtn" onclick="switchTab('active')" class="tab-btn active border-b-2 border-blue-600 text-blue-600 font-semibold py-1.5 px-3 flex items-center gap-1.5">
+      <div class="flex border-b border-slate-200 bg-white px-2 pt-1 rounded-t-lg shadow-xs text-xs overflow-x-auto">
+        <button id="tabActiveBtn" onclick="switchTab('active')" class="tab-btn active border-b-2 border-blue-600 text-blue-600 font-semibold py-1.5 px-3 flex items-center gap-1.5 shrink-0">
           <i class="fa-solid fa-list-check text-[11px]"></i>
           Active Statements
           <span id="badgeActiveCount" class="bg-blue-100 text-blue-700 text-[10px] px-1.5 rounded-full">0</span>
         </button>
-        <button id="tabDeletedBtn" onclick="switchTab('deleted')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5">
+        <button id="tabLabelsBtn" onclick="switchTab('labels')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5 shrink-0">
+          <i class="fa-solid fa-language text-[11px]"></i>
+          Label Changes
+          <span id="badgeLabelsCount" class="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 rounded-full">0</span>
+        </button>
+        <button id="tabDeletedBtn" onclick="switchTab('deleted')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5 shrink-0">
           <i class="fa-solid fa-trash-arrow-up text-[11px]"></i>
           Deleted Facts
           <span id="badgeDeletedCount" class="bg-slate-100 text-slate-600 text-[10px] px-1.5 rounded-full">0</span>
         </button>
-        <button id="tabLeaderboardBtn" onclick="switchTab('leaderboard')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5">
+        <button id="tabLeaderboardBtn" onclick="switchTab('leaderboard')" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-semibold py-1.5 px-3 flex items-center gap-1.5 shrink-0">
           <i class="fa-solid fa-trophy text-[11px]"></i>
           Contributors Ranking
         </button>
@@ -153,7 +169,46 @@
         </div>
       </div>
 
-      <!-- TAB 2: Deleted / Reverted Facts -->
+      <!-- TAB 2: Label Changes Analysis -->
+      <div id="viewLabels" class="tab-view hidden space-y-2">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-white p-2 rounded-lg border border-slate-200 text-xs">
+          <div class="relative flex-1">
+            <input type="text" id="filterLabelsInput" onkeyup="filterLabelChanges()" placeholder="Filter label text or user..." class="w-full pl-7 pr-2 py-1 bg-slate-50 border border-slate-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <i class="fa-solid fa-filter absolute left-2 top-2 text-slate-400 text-[10px]"></i>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <label for="filterLanguageSelect" class="text-[11px] text-slate-500 whitespace-nowrap">Lang:</label>
+            <select id="filterLanguageSelect" onchange="filterLabelChanges()" class="bg-slate-50 border border-slate-300 rounded py-1 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="ALL">All Languages</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs">
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full text-left text-xs text-slate-600">
+              <thead class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold text-[11px]">
+                <tr>
+                  <th class="py-1.5 px-2.5">Lang</th>
+                  <th class="py-1.5 px-2.5">Type</th>
+                  <th class="py-1.5 px-2.5">Label Change (Old &rarr; New)</th>
+                  <th class="py-1.5 px-2.5">Editor</th>
+                  <th class="py-1.5 px-2.5">Date</th>
+                </tr>
+              </thead>
+              <tbody id="labelsTableBody" class="divide-y divide-slate-100">
+                <!-- Dynamically filled -->
+              </tbody>
+            </table>
+          </div>
+          <div id="labelsEmptyState" class="hidden p-4 text-center text-slate-500 text-xs">
+            <i class="fa-solid fa-language text-slate-300 text-xl mb-1"></i>
+            <p>No label modifications detected across revisions.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Deleted / Reverted Facts -->
       <div id="viewDeleted" class="tab-view hidden space-y-2">
         <div class="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-[11px] text-amber-800 flex items-center gap-2">
           <i class="fa-solid fa-triangle-exclamation text-amber-600 shrink-0"></i>
@@ -184,7 +239,7 @@
         </div>
       </div>
 
-      <!-- TAB 3: Contributor Leaderboard -->
+      <!-- TAB 4: Contributor Leaderboard -->
       <div id="viewLeaderboard" class="tab-view hidden space-y-2">
         <div class="grid grid-cols-3 gap-2 text-xs">
           <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-xs flex items-center space-x-2">
@@ -234,8 +289,10 @@
     let revisionsList = [];
     let activeProvenanceMap = {};
     let deletedFactsList = [];
+    let labelChangesList = [];
     let contributorStats = {};
     let searchDebounce = null;
+    let isNavigatingHistory = false;
 
     const API_URL = 'https://www.wikidata.org/w/api.php';
 
@@ -243,6 +300,89 @@
     const searchInput = document.getElementById('searchInput');
     const searchResults = document.getElementById('searchResults');
     const clearSearchBtn = document.getElementById('clearSearch');
+
+    // INITIALIZATION & ROUTING
+    window.addEventListener('DOMContentLoaded', () => {
+      const qid = getQidFromURL();
+      if (qid) {
+        searchInput.value = qid;
+        loadEntity(qid, false);
+      }
+    });
+
+    window.addEventListener('popstate', (e) => {
+      const qid = getQidFromURL();
+      if (qid && qid !== currentEntityId) {
+        isNavigatingHistory = true;
+        searchInput.value = qid;
+        loadEntity(qid, false);
+      } else if (!qid) {
+        clearEntityState();
+      }
+    });
+
+    function getQidFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      const qParam = params.get('qid') || params.get('item') || params.get('id');
+      if (qParam && /^Q\d+$/i.test(qParam.trim())) {
+        return qParam.trim().toUpperCase();
+      }
+
+      const hash = window.location.hash.replace('#', '').trim();
+      if (/^Q\d+$/i.test(hash)) {
+        return hash.toUpperCase();
+      }
+      return null;
+    }
+
+    function updateURLPermalink(qId) {
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('qid', qId);
+      currentUrl.searchParams.delete('item');
+      currentUrl.searchParams.delete('id');
+      
+      if (!isNavigatingHistory) {
+        window.history.pushState({ qid: qId }, '', currentUrl.toString());
+      }
+      isNavigatingHistory = false;
+    }
+
+    function clearEntityState(e) {
+      if (e) e.preventDefault();
+      currentEntityId = null;
+      resetState();
+      searchInput.value = '';
+      clearSearchBtn.classList.add('hidden');
+      searchResults.classList.add('hidden');
+      document.getElementById('welcomeState').classList.remove('hidden');
+      document.getElementById('itemHeader').classList.add('hidden');
+      document.getElementById('analysisContent').classList.add('hidden');
+
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete('qid');
+      currentUrl.searchParams.delete('item');
+      currentUrl.searchParams.delete('id');
+      window.history.pushState({}, '', currentUrl.pathname + currentUrl.search);
+    }
+
+    function copyPermalink() {
+      const permalink = window.location.href;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(permalink);
+      } else {
+        const input = document.createElement('input');
+        input.value = permalink;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+
+      const btnText = document.getElementById('shareBtnText');
+      const originalText = btnText.innerText;
+      btnText.innerText = 'Copied!';
+      setTimeout(() => { btnText.innerText = originalText; }, 2000);
+    }
 
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.trim();
@@ -320,9 +460,14 @@
       searchResults.classList.remove('hidden');
     }
 
-    async function loadEntity(qId) {
-      currentEntityId = qId;
+    async function loadEntity(qId, updateUrl = true) {
+      const cleanQId = qId.trim().toUpperCase();
+      currentEntityId = cleanQId;
       resetState();
+
+      if (updateUrl) {
+        updateURLPermalink(cleanQId);
+      }
 
       document.getElementById('welcomeState').classList.add('hidden');
       document.getElementById('itemHeader').classList.remove('hidden');
@@ -334,32 +479,32 @@
       try {
         const entityParams = new URLSearchParams({
           action: 'wbgetentities',
-          ids: qId,
+          ids: cleanQId,
           format: 'json',
           origin: '*'
         });
         const entityRes = await fetch(`${API_URL}?${entityParams.toString()}`);
         const entityJson = await entityRes.json();
-        entityData = entityJson.entities[qId];
+        entityData = entityJson.entities[cleanQId];
 
         if (!entityData) {
           alert('Failed to load item data');
           return;
         }
 
-        const label = entityData.labels?.en?.value || Object.values(entityData.labels || {})[0]?.value || qId;
+        const label = entityData.labels?.en?.value || Object.values(entityData.labels || {})[0]?.value || cleanQId;
         const desc = entityData.descriptions?.en?.value || Object.values(entityData.descriptions || {})[0]?.value || 'No description';
 
         document.getElementById('itemLabel').innerText = label;
-        document.getElementById('itemIdBadge').innerText = qId;
+        document.getElementById('itemIdBadge').innerText = cleanQId;
         document.getElementById('itemDescription').innerText = desc;
-        document.getElementById('wikidataLink').href = `https://www.wikidata.org/wiki/${qId}`;
+        document.getElementById('wikidataLink').href = `https://www.wikidata.org/wiki/${cleanQId}`;
 
         updateProgress(40, 'Fetching revisions...');
-        revisionsList = await fetchAllRevisions(qId, 80);
+        revisionsList = await fetchAllRevisions(cleanQId, 80);
         document.getElementById('statTotalRevisions').innerText = revisionsList.length;
 
-        updateProgress(70, 'Analyzing statement diffs...');
+        updateProgress(70, 'Analyzing statement diffs & label changes...');
         await analyzeProvenanceAndDeletions();
 
         updateProgress(90, 'Fetching labels...');
@@ -386,6 +531,7 @@
       revisionsList = [];
       activeProvenanceMap = {};
       deletedFactsList = [];
+      labelChangesList = [];
       contributorStats = {};
     }
 
@@ -437,6 +583,8 @@
       const chronologicalRevs = [...revisionsList].reverse();
       let trackedClaims = {};
       let activeOwners = {};
+      let lastLabelsState = {};
+      labelChangesList = [];
 
       for (const rev of chronologicalRevs) {
         const user = rev.user || 'Anonymous';
@@ -447,13 +595,40 @@
         if (!content) continue;
 
         let revClaims = {};
+        let revLabels = {};
         try {
           const parsed = JSON.parse(content);
           revClaims = parsed.claims || {};
+          revLabels = parsed.labels || {};
         } catch (e) {
           continue;
         }
 
+        // --- 1. TRACK MULTILINGUAL LABEL CHANGES ---
+        const allLangs = new Set([...Object.keys(lastLabelsState), ...Object.keys(revLabels)]);
+        for (const lang of allLangs) {
+          const prevVal = lastLabelsState[lang]?.value || null;
+          const currVal = revLabels[lang]?.value || null;
+
+          if (prevVal !== currVal) {
+            let changeType = 'modified';
+            if (!prevVal && currVal) changeType = 'added';
+            else if (prevVal && !currVal) changeType = 'removed';
+
+            labelChangesList.push({
+              lang,
+              oldValue: prevVal,
+              newValue: currVal,
+              user,
+              timestamp,
+              revid,
+              type: changeType
+            });
+          }
+        }
+        lastLabelsState = revLabels;
+
+        // --- 2. TRACK STATEMENT PROVENANCE & DELETIONS ---
         let currentRevisionGuids = new Set();
 
         for (const [prop, claimsArr] of Object.entries(revClaims)) {
@@ -545,8 +720,10 @@
 
       document.getElementById('statActiveClaims').innerText = activeClaimsCount;
       document.getElementById('statDeletedClaims').innerText = deletedFactsList.length;
+      document.getElementById('statLabelChanges').innerText = labelChangesList.length;
       document.getElementById('badgeActiveCount').innerText = activeClaimsCount;
       document.getElementById('badgeDeletedCount').innerText = deletedFactsList.length;
+      document.getElementById('badgeLabelsCount').innerText = labelChangesList.length;
     }
 
     async function fetchMissingLabels() {
@@ -598,6 +775,7 @@
 
     function renderAllViews() {
       renderActiveStatements();
+      renderLabelChanges();
       renderDeletedFacts();
       renderLeaderboard();
     }
@@ -694,6 +872,99 @@
 
         container.appendChild(propBlock);
       }
+    }
+
+    function renderLabelChanges() {
+      const tbody = document.getElementById('labelsTableBody');
+      const emptyState = document.getElementById('labelsEmptyState');
+      const langSelect = document.getElementById('filterLanguageSelect');
+
+      tbody.innerHTML = '';
+
+      // Populate language select options dynamically
+      const currentSelectedLang = langSelect.value;
+      const languages = Array.from(new Set(labelChangesList.map(l => l.lang))).sort();
+      langSelect.innerHTML = `<option value="ALL">All Languages (${languages.length})</option>`;
+      languages.forEach(lang => {
+        const opt = document.createElement('option');
+        opt.value = lang;
+        opt.textContent = lang;
+        if (lang === currentSelectedLang) opt.selected = true;
+        langSelect.appendChild(opt);
+      });
+
+      if (labelChangesList.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      // Sort by newest first
+      const sortedLabelChanges = [...labelChangesList].reverse();
+
+      sortedLabelChanges.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'label-change-row hover:bg-indigo-50/20 transition border-b border-slate-100 text-xs';
+        tr.dataset.lang = item.lang;
+        tr.dataset.user = item.user.toLowerCase();
+        tr.dataset.text = `${item.oldValue || ''} ${item.newValue || ''}`.toLowerCase();
+
+        let typeBadge = '';
+        if (item.type === 'added') {
+          typeBadge = '<span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-semibold">Added</span>';
+        } else if (item.type === 'modified') {
+          typeBadge = '<span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px] font-semibold">Modified</span>';
+        } else {
+          typeBadge = '<span class="bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded text-[10px] font-semibold">Removed</span>';
+        }
+
+        let changeHtml = '';
+        if (item.type === 'added') {
+          changeHtml = `<span class="text-emerald-700 font-medium">${escapeHtml(item.newValue)}</span>`;
+        } else if (item.type === 'removed') {
+          changeHtml = `<span class="text-rose-600 line-through">${escapeHtml(item.oldValue)}</span>`;
+        } else {
+          changeHtml = `
+            <span class="text-slate-400 line-through mr-1">${escapeHtml(item.oldValue)}</span>
+            <span class="text-slate-400">&rarr;</span>
+            <span class="text-blue-700 font-medium ml-1">${escapeHtml(item.newValue)}</span>
+          `;
+        }
+
+        tr.innerHTML = `
+          <td class="py-1.5 px-2.5 font-bold font-mono text-slate-700">
+            ${escapeHtml(item.lang)}
+          </td>
+          <td class="py-1.5 px-2.5">
+            ${typeBadge}
+          </td>
+          <td class="py-1.5 px-2.5 max-w-md break-words">
+            ${changeHtml}
+          </td>
+          <td class="py-1.5 px-2.5 text-slate-700">
+            <span class="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-medium">${escapeHtml(item.user)}</span>
+          </td>
+          <td class="py-1.5 px-2.5 text-slate-400 text-[10px]">
+            ${formatDate(item.timestamp)}
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+
+      filterLabelChanges();
+    }
+
+    function filterLabelChanges() {
+      const query = document.getElementById('filterLabelsInput').value.toLowerCase().trim();
+      const lang = document.getElementById('filterLanguageSelect').value;
+      const rows = document.querySelectorAll('.label-change-row');
+
+      rows.forEach(row => {
+        const matchesLang = (lang === 'ALL' || row.dataset.lang === lang);
+        const matchesQuery = !query || row.dataset.user.includes(query) || row.dataset.text.includes(query);
+        row.classList.toggle('hidden', !(matchesLang && matchesQuery));
+      });
     }
 
     function renderDeletedFacts() {
@@ -801,6 +1072,9 @@
       if (tabName === 'active') {
         document.getElementById('tabActiveBtn').classList.add('border-blue-600', 'text-blue-600');
         document.getElementById('viewActive').classList.remove('hidden');
+      } else if (tabName === 'labels') {
+        document.getElementById('tabLabelsBtn').classList.add('border-blue-600', 'text-blue-600');
+        document.getElementById('viewLabels').classList.remove('hidden');
       } else if (tabName === 'deleted') {
         document.getElementById('tabDeletedBtn').classList.add('border-blue-600', 'text-blue-600');
         document.getElementById('viewDeleted').classList.remove('hidden');
